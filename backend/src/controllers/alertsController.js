@@ -1,75 +1,48 @@
 // src/controllers/alertsController.js
-const { v4: uuidv4 } = require("uuid");
-const { alerts } = require("../data/store");
+const Alert = require("../models/Alert");
+const asyncHandler = require("../middleware/asyncHandler");
 
-// GET /api/alerts — get all alerts
-const getAllAlerts = (req, res) => {
+// GET /api/alerts
+const getAllAlerts = asyncHandler(async (req, res) => {
   const { resolved } = req.query;
+  const filter = {};
+  if (resolved !== undefined) filter.resolved = resolved === "true";
 
-  let result = [...alerts];
+  const alerts = await Alert.find(filter)
+    .populate("cropId", "name field")
+    .sort({ createdAt: -1 });
 
-  if (resolved !== undefined) {
-    result = result.filter(
-      (a) => a.resolved === (resolved === "true")
-    );
-  }
+  res.status(200).json({ success: true, count: alerts.length, data: alerts });
+});
 
-  res.status(200).json({ success: true, count: result.length, data: result });
-};
+// POST /api/alerts
+const createAlert = asyncHandler(async (req, res) => {
+  const alert = await Alert.create(req.body);
+  res.status(201).json({ success: true, data: alert });
+});
 
-// POST /api/alerts — create alert
-const createAlert = (req, res) => {
-  const { cropId, type, message } = req.body;
-
-  if (!cropId || !message) {
-    res.status(400);
-    throw new Error("Fields 'cropId' and 'message' are required");
-  }
-
-  const newAlert = {
-    id: uuidv4(),
-    cropId,
-    type: type ?? "info",
-    message,
-    resolved: false,
-    createdAt: new Date().toISOString(),
-  };
-
-  alerts.push(newAlert);
-
-  res.status(201).json({ success: true, data: newAlert });
-};
-
-// PATCH /api/alerts/:id/resolve — mark alert resolved
-const resolveAlert = (req, res) => {
-  const index = alerts.findIndex((a) => a.id === req.params.id);
-
-  if (index === -1) {
+// PATCH /api/alerts/:id/resolve
+const resolveAlert = asyncHandler(async (req, res) => {
+  const alert = await Alert.findByIdAndUpdate(
+    req.params.id,
+    { resolved: true },
+    { new: true }
+  );
+  if (!alert) {
     res.status(404);
-    throw new Error(`Alert with id '${req.params.id}' not found`);
+    throw new Error(`Alert not found with id: ${req.params.id}`);
   }
-
-  alerts[index].resolved = true;
-
-  res.status(200).json({ success: true, data: alerts[index] });
-};
+  res.status(200).json({ success: true, data: alert });
+});
 
 // DELETE /api/alerts/:id
-const deleteAlert = (req, res) => {
-  const index = alerts.findIndex((a) => a.id === req.params.id);
-
-  if (index === -1) {
+const deleteAlert = asyncHandler(async (req, res) => {
+  const alert = await Alert.findByIdAndDelete(req.params.id);
+  if (!alert) {
     res.status(404);
-    throw new Error(`Alert with id '${req.params.id}' not found`);
+    throw new Error(`Alert not found with id: ${req.params.id}`);
   }
-
-  const deleted = alerts.splice(index, 1)[0];
-
-  res.status(200).json({
-    success: true,
-    message: "Alert deleted",
-    data: deleted,
-  });
-};
+  res.status(200).json({ success: true, message: "Alert deleted", data: alert });
+});
 
 module.exports = { getAllAlerts, createAlert, resolveAlert, deleteAlert };
