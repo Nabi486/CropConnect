@@ -2,21 +2,27 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
+const passport = require("./config/passport");
 const connectDB = require("./config/db");
 const { notFound, errorHandler } = require("./middleware/errorHandler");
+const { apiLimiter } = require("./middleware/rateLimiter");
 
+const authRouter = require("./routes/auth");
 const cropsRouter = require("./routes/crops");
-const alertsRouter = require("./routes/alerts");
 
-// Connect to MongoDB
+// Connect DB
 connectDB();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// ── Middleware ──────────────────────────────────────────────
-app.use(cors({ origin: process.env.FRONTEND_URL || "http://localhost:3000" }));
+// ── Middleware ──────────────────────────────────────
+app.use(cors({
+  origin: process.env.FRONTEND_URL || "http://localhost:3000",
+  credentials: true,
+}));
 app.use(express.json());
+app.use(passport.initialize());
 
 // Request logger
 app.use((req, res, next) => {
@@ -24,30 +30,25 @@ app.use((req, res, next) => {
   next();
 });
 
-// ── Routes ──────────────────────────────────────────────────
+// ── Routes ──────────────────────────────────────────
 app.get("/", (req, res) => {
   res.json({
     success: true,
-    message: "Smart Farm Hub API is running 🌱",
-    version: "2.0.0",
-    database: "MongoDB Atlas",
+    message: "Smart Farm Hub API v3.0 🌱",
     endpoints: {
-      crops: "/api/crops",
-      cropSearch: "/api/crops/search?q=wheat",
-      alerts: "/api/alerts",
+      auth: "/api/auth",
+      crops: "/api/crops (protected — requires JWT)",
     },
   });
 });
 
-app.use("/api/crops", cropsRouter);
-app.use("/api/alerts", alertsRouter);
+app.use("/api/auth", authRouter);
+app.use("/api/crops", apiLimiter, cropsRouter);
 
-// ── Error Handling ──────────────────────────────────────────
+// ── Error Handling ──────────────────────────────────
 app.use(notFound);
 app.use(errorHandler);
 
-// ── Start ───────────────────────────────────────────────────
 app.listen(PORT, () => {
   console.log(`✅ Server running on http://localhost:${PORT}`);
-  console.log(`   Environment: ${process.env.NODE_ENV || "development"}`);
 });
